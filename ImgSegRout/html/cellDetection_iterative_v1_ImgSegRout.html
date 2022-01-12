@@ -1,0 +1,591 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>cellDetection_iterative_v1_ImgSegRout</title><meta name="generator" content="MATLAB 9.3"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2022-01-12"><meta name="DC.source" content="cellDetection_iterative_v1_ImgSegRout.m"><style type="text/css">
+html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,sub,sup,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
+
+html { min-height:100%; margin-bottom:1px; }
+html body { height:100%; margin:0px; font-family:Arial, Helvetica, sans-serif; font-size:10px; color:#000; line-height:140%; background:#fff none; overflow-y:scroll; }
+html body td { vertical-align:top; text-align:left; }
+
+h1 { padding:0px; margin:0px 0px 25px; font-family:Arial, Helvetica, sans-serif; font-size:1.5em; color:#d55000; line-height:100%; font-weight:normal; }
+h2 { padding:0px; margin:0px 0px 8px; font-family:Arial, Helvetica, sans-serif; font-size:1.2em; color:#000; font-weight:bold; line-height:140%; border-bottom:1px solid #d6d4d4; display:block; }
+h3 { padding:0px; margin:0px 0px 5px; font-family:Arial, Helvetica, sans-serif; font-size:1.1em; color:#000; font-weight:bold; line-height:140%; }
+
+a { color:#005fce; text-decoration:none; }
+a:hover { color:#005fce; text-decoration:underline; }
+a:visited { color:#004aa0; text-decoration:none; }
+
+p { padding:0px; margin:0px 0px 20px; }
+img { padding:0px; margin:0px 0px 20px; border:none; }
+p img, pre img, tt img, li img, h1 img, h2 img { margin-bottom:0px; } 
+
+ul { padding:0px; margin:0px 0px 20px 23px; list-style:square; }
+ul li { padding:0px; margin:0px 0px 7px 0px; }
+ul li ul { padding:5px 0px 0px; margin:0px 0px 7px 23px; }
+ul li ol li { list-style:decimal; }
+ol { padding:0px; margin:0px 0px 20px 0px; list-style:decimal; }
+ol li { padding:0px; margin:0px 0px 7px 23px; list-style-type:decimal; }
+ol li ol { padding:5px 0px 0px; margin:0px 0px 7px 0px; }
+ol li ol li { list-style-type:lower-alpha; }
+ol li ul { padding-top:7px; }
+ol li ul li { list-style:square; }
+
+.content { font-size:1.2em; line-height:140%; padding: 20px; }
+
+pre, code { font-size:12px; }
+tt { font-size: 1.2em; }
+pre { margin:0px 0px 20px; }
+pre.codeinput { padding:10px; border:1px solid #d3d3d3; background:#f7f7f7; }
+pre.codeoutput { padding:10px 11px; margin:0px 0px 20px; color:#4c4c4c; }
+pre.error { color:red; }
+
+@media print { pre.codeinput, pre.codeoutput { word-wrap:break-word; width:100%; } }
+
+span.keyword { color:#0000FF }
+span.comment { color:#228B22 }
+span.string { color:#A020F0 }
+span.untermstring { color:#B20000 }
+span.syscmd { color:#B28C00 }
+
+.footer { width:auto; padding:10px 0px; margin:25px 0px 0px; border-top:1px dotted #878787; font-size:0.8em; line-height:140%; font-style:italic; color:#878787; text-align:left; float:none; }
+.footer p { margin:0px; }
+.footer a { color:#878787; }
+.footer a:hover { color:#878787; text-decoration:underline; }
+.footer a:visited { color:#878787; }
+
+table th { padding:7px 5px; text-align:left; vertical-align:middle; border: 1px solid #d6d4d4; font-weight:bold; }
+table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px solid #d6d4d4; }
+
+
+
+
+
+  </style></head><body><div class="content"><h2>Contents</h2><div><ul><li><a href="#3">(1) Image Normalization</a></li><li><a href="#4">(2) Initialize segmentation: create gradient image</a></li><li><a href="#5">(3) iterative thresholding followed by morphological operations and watershed transformation</a></li><li><a href="#6">(4) create whole list with ROI coordinates</a></li><li><a href="#7">(5) clear overlaps and create binary mask (BW_watershed) and labeled matrix (L-watershed)</a></li><li><a href="#8">(6) visualize segmentation</a></li></ul></div><pre class="codeinput"><span class="comment">% 01.12.2022: release beta v1</span>
+<span class="comment">% last term of function name declares belonging routine</span>
+
+<span class="comment">% this function performs the segmentation of fluorescence images to detect</span>
+<span class="comment">% synaptic puncta automatically</span>
+
+<span class="keyword">function</span> [regionStats,BW_watershed, L_watershed] = cellDetection_iterative_v1_ImgSegRout(image,minArea,maxArea,it)
+</pre><pre class="codeinput">close <span class="string">all</span>
+border = 5; <span class="comment">%if changed, it should be broader than kernel width in PreProcessing</span>
+</pre><h2 id="3">(1) Image Normalization</h2><pre class="codeinput"><span class="comment">%just if it's not yet normalised; won't change anything if it already is</span>
+mini = min(image(:));
+maxi = max(image(:));
+filtered =  (image-mini)/(maxi-mini);
+</pre><pre class="codeoutput error">Not enough input arguments.
+
+Error in cellDetection_iterative_v1_ImgSegRout (line 14)
+mini = min(image(:));
+</pre><h2 id="4">(2) Initialize segmentation: create gradient image</h2><pre class="codeinput">s = it;
+[~,~,Gv,Gh] = edge(filtered,<span class="string">'sobel'</span>);
+RegionStorage = cell(s,2);
+BW_zero = false(size(filtered));
+BW_zero([1:border end-border:end],:) = 0;
+BW_zero(:,[1:border end-border:end]) = 0;
+Op =sqrt((Gv.*Gv)+(Gh.*Gh));
+
+c = 1;
+pth_0 = 0.95;
+thresh = calcthresh(filtered,pth_0);
+hInit =max(Op(:));
+</pre><h2 id="5">(3) iterative thresholding followed by morphological operations and watershed transformation</h2><pre class="codeinput"><span class="keyword">for</span> step = 1:s
+    x = step-1;
+    pth = 0.005*(1.259)^x;
+    BW = S(Op,pth,hInit);
+    <span class="comment">%remove BW borders</span>
+    BW([1:border end-border:end],:) = 0;
+    BW(:,[1:border end-border:end]) = 0;
+
+    BW = BW-BW_zero;
+
+    <span class="comment">% morphological operators</span>
+    SE = strel(<span class="string">'disk'</span>,1,0);
+    BWdil = imdilate(BW,SE);
+    BWfill = imfill(BWdil,4,<span class="string">'holes'</span>);
+    BWer = imerode(BWfill,SE);
+    <span class="comment">%fill holes</span>
+    BWfill = BWer;
+    BWfill = logical(BWfill);
+    Nozero = filtered(BWfill);
+    Nozero(Nozero == 0) = [];
+    h = Minimum_median(Nozero, 5, <span class="string">'Type'</span>,<span class="string">'percent'</span>, <span class="string">'Dimension'</span>,1 );
+
+    <span class="comment">%get regiones</span>
+    RegProp = regionprops(BWfill, <span class="string">'PixelIdxList'</span>, <span class="string">'PixelList'</span>, <span class="string">'Area'</span>,<span class="string">'Perimeter'</span>);
+
+    <span class="comment">% delete small regions;</span>
+    RegPropNew = RegProp;
+    RegPropNew([RegProp.Area] &lt;= minArea) = [];
+
+    BWcleared = zeros(size(BW));
+    nRoi = length(RegPropNew);
+    <span class="keyword">for</span> roi = 1:nRoi
+        BWcleared(RegPropNew(roi).PixelIdxList) = 1;
+    <span class="keyword">end</span>
+
+
+    <span class="comment">% particle refinement</span>
+    N = length(RegProp)*10;
+    regionList = repmat(struct(<span class="string">'PixelIdxList'</span>,[]),1,N);
+    counter = 1;
+    unchanged = 0;
+    <span class="keyword">for</span> roi = 1:nRoi
+
+        <span class="keyword">if</span> RegPropNew(roi).Area &gt;= minArea*3
+            region = RegPropNew(roi).PixelList;
+            idx = RegPropNew(roi).PixelIdxList;
+
+            [centroids, section, xmin, ymin] = getCentroids(region,idx,filtered);
+            <span class="keyword">if</span> length(centroids) &gt; 200 || isempty(centroids)
+                <span class="keyword">continue</span>
+            <span class="keyword">elseif</span> length(centroids) == 1
+                PixelIdxList = RegPropNew(roi).PixelIdxList;
+                <span class="comment">% discard "tails'</span>
+                BWcur = zeros(size(BW));
+                BWcur(PixelIdxList) = 1;
+                BWdisc = imerode(BWcur,SE);
+                BWdisc = imdilate(BWdisc,SE);
+                regiondisc = regionprops(BWdisc,<span class="string">'Area'</span>,<span class="string">'PixelList'</span>,<span class="string">'PixelIdxList'</span>);
+                [regionList, counter] = checkIfMultiple(regionList, regiondisc, counter, BWdisc);
+
+                unchanged = unchanged + 1;
+                regionList(counter-1).unchanged = 1;
+                <span class="keyword">continue</span>
+            <span class="keyword">end</span>
+
+            [idxList, numbC] = getSingles(centroids, section, thresh);
+
+            idxListtrans = idxList;
+            idxList = coordTrans(idxListtrans, size(section),size(BWfill), xmin, ymin);
+            [counter, regionList] = precising(regionList,idxList,numbC, size(BWfill), counter,h, filtered, minArea);
+        <span class="keyword">else</span>
+            <span class="comment">% condition above threshold:</span>
+            PixelIdxList = RegPropNew(roi).PixelIdxList;
+            regionList(counter).Area = length(RegPropNew(roi).PixelList);
+            regionList(counter).PixelList = RegPropNew(roi).PixelList;
+
+            <span class="comment">% discard "tails'</span>
+            BWcur = zeros(size(BW));
+            BWcur(PixelIdxList) = 1;
+            <span class="keyword">if</span> length(PixelIdxList) &gt;= minArea * 2
+                BWdisc = imerode(BWcur,SE);
+                BWdisc = imdilate(BWdisc,SE);
+            <span class="keyword">else</span>
+                BWdisc = BWcur;
+            <span class="keyword">end</span>
+            regiondisc = regionprops(BWdisc,<span class="string">'Area'</span>,<span class="string">'PixelList'</span>,<span class="string">'PixelIdxList'</span>);
+
+            <span class="keyword">if</span> size(regiondisc,1) ~= 0
+                [regionList, counter] = checkIfMultiple(regionList, regiondisc, counter, BW);
+            <span class="keyword">else</span>
+                regionList(counter) = [];
+                counter = counter + 1;
+            <span class="keyword">end</span>
+
+
+            unchanged = unchanged + 1;
+            regionList(counter-1).unchanged = 1;
+
+        <span class="keyword">end</span>
+
+    <span class="keyword">end</span>
+    regionList = regionList(1:counter-1);
+    <span class="keyword">if</span> size(regionList,2) == 0
+        <span class="keyword">continue</span>
+    <span class="keyword">end</span>
+    regionList(cellfun(@isempty,{regionList.Area})) = [];
+    regionList(cellfun(@isempty,{regionList.PixelIdxList})) = [];
+    regionList([regionList.Area] &lt; minArea) = [];
+
+    <span class="comment">% current BW template</span>
+    BW_watershed = zeros(size(BW));
+    nRoi = length(regionList);
+    <span class="keyword">for</span> roi = 1:nRoi
+        BW_watershed (regionList(roi).PixelIdxList) = 1;
+    <span class="keyword">end</span>
+
+    BW_zero = logical(BW_zero+BW_watershed);
+
+    RegionStorage{c,1} = regionList;
+    RegionStorage{c,2} = length(regionList);
+    c = c+1;
+<span class="keyword">end</span>
+</pre><h2 id="6">(4) create whole list with ROI coordinates</h2><pre class="codeinput">numbRoi = sum(cell2mat(RegionStorage(:,2)));
+
+regionList = repmat(struct(<span class="string">'PixelIdxList'</span>,[]),numbRoi,1);
+count=1;
+<span class="keyword">for</span> slice = 1:c-1
+    regL = RegionStorage{slice,1};
+    <span class="keyword">for</span> roi = 1:length(regL)
+        regionList(count+roi-1).PixelIdxList = regL(roi).PixelIdxList;
+    <span class="keyword">end</span>
+    count= count+length(regL)-1;
+<span class="keyword">end</span>
+
+regionList(cellfun(@isempty,{regionList.PixelIdxList})) = [];
+
+regionStats = regionList;
+</pre><h2 id="7">(5) clear overlaps and create binary mask (BW_watershed) and labeled matrix (L-watershed)</h2><pre class="codeinput"><span class="keyword">for</span> clearing = 1:3
+    BW_watershed = zeros(size(BW));
+    L_watershed = zeros(size(BW));
+    <span class="comment">%nRoi = length(RegPropNew);</span>
+    nRoi = length(regionStats);
+    <span class="keyword">for</span> roi = 1:nRoi
+        L_watershed (regionStats(roi).PixelIdxList) = roi;
+        BW_watershed (regionStats(roi).PixelIdxList) = 1;
+    <span class="keyword">end</span>
+    regionStats = regionprops(L_watershed,image, <span class="string">'PixelIdxList'</span>, <span class="string">'PixelList'</span>, <span class="string">'Area'</span>,<span class="string">'Perimeter'</span>,<span class="string">'WeightedCentroid'</span><span class="keyword">...</span>
+        ,<span class="string">'MeanIntensity'</span>,<span class="string">'MaxIntensity'</span>);
+    <span class="comment">% clear</span>
+    regionStats([regionStats.MeanIntensity] == 0) = [];
+    regionStats([regionStats.Area] &lt; minArea ) = [];
+    regionStats([regionStats.Area] &gt; maxArea ) = [];
+    regionStats(cellfun(@isempty,{regionStats.PixelIdxList})) = [];
+<span class="keyword">end</span>
+</pre><h2 id="8">(6) visualize segmentation</h2><pre class="codeinput"><span class="comment">%colored watershed</span>
+
+Label = label2rgb(L_watershed,<span class="string">'jet'</span>,<span class="string">'w'</span>,<span class="string">'shuffle'</span>);
+imshow(Label)
+title(<span class="string">'Colored Watershed Label Matrix'</span>)
+vis_cells(filtered ,BW_watershed);
+</pre><pre class="codeinput"><span class="keyword">end</span>
+
+<span class="comment">%%:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::</span>
+<span class="keyword">function</span> Op2 = S(Op, pth, hInit)
+
+Oplin = Op(:);
+[counts,bins] = hist(Oplin,500);
+k = 0;
+<span class="keyword">while</span> sum(counts(end-k:end))&lt; pth*sum(counts) <span class="comment">%threshold finden</span>
+    k = k+1;
+<span class="keyword">end</span>
+h=bins(end-k+1);
+Op2 = Op;
+Op2(Op2&lt;h | Op2&gt;hInit) = 0;
+Op2 = logical(Op2);
+<span class="keyword">end</span>
+
+<span class="keyword">function</span> [regList_all, counter] = checkIfMultiple(regList_all,regList,counter, img) <span class="comment">%image just for size</span>
+template = zeros(size(img));
+counterInit = counter;
+
+<span class="keyword">if</span> isfield(regList,<span class="string">'PixelIdxList'</span>) &amp;&amp; ~isempty(regList)
+    template(regList.PixelIdxList)=1;
+    select = bwconncomp(template,4);
+    <span class="keyword">if</span> select.NumObjects &gt; 1
+        numObj = select.NumObjects;
+        <span class="keyword">for</span> nO = 1:numObj
+            PixelIdxList = select.PixelIdxList{1,nO};
+            <span class="comment">%regCleaned = cleanRg(PixelIdxList,sizImg,SE);</span>
+            <span class="keyword">if</span> length(PixelIdxList) &lt; 6
+                <span class="keyword">continue</span>
+            <span class="keyword">end</span>
+            regList_all(counter).PixelIdxList = PixelIdxList;
+            regList_all(counter).Area = length(PixelIdxList);
+            [r,c] = ind2sub(size(img),PixelIdxList);
+            regList_all(counter).PixelList = [r c];
+            counter = counter+1;
+        <span class="keyword">end</span>
+        <span class="keyword">if</span> counter == counterInit <span class="comment">% if all regions are below min numb pixel</span>
+            counter = counter + 1;
+        <span class="keyword">end</span>
+    <span class="keyword">else</span>
+        regList_all(counter).PixelIdxList = regList.PixelIdxList;
+        regList_all(counter).Area = length(regList.PixelIdxList);
+        [r,c] = ind2sub(size(img),regList.PixelIdxList);
+        regList_all(counter).PixelList = [r c];
+        counter = counter+1;
+    <span class="keyword">end</span>
+<span class="keyword">end</span>
+<span class="keyword">end</span>
+
+<span class="keyword">function</span> S = calcthresh(img,pth)
+ImgVec = img(:);
+ImgVec = double(ImgVec);
+ImgVec(ImgVec==0) = [];
+[counts,bins] = hist(ImgVec,500);
+<span class="comment">%hist(ImgVec,50) falls mans doch mal sehen will</span>
+k = 0;
+<span class="keyword">while</span> sum(counts(end-k:end))&lt; pth*sum(counts) <span class="comment">%threshold finden</span>
+    k = k+1;
+<span class="keyword">end</span>
+S = bins(end-k+1);
+<span class="keyword">end</span>
+</pre><p class="footer"><br><a href="http://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2017b</a><br></p></div><!--
+##### SOURCE BEGIN #####
+% 01.12.2022: release beta v1
+% last term of function name declares belonging routine
+
+% this function performs the segmentation of fluorescence images to detect
+% synaptic puncta automatically
+
+function [regionStats,BW_watershed, L_watershed] = cellDetection_iterative_v1_ImgSegRout(image,minArea,maxArea,it)
+close all
+border = 5; %if changed, it should be broader than kernel width in PreProcessing
+
+
+%% (1) Image Normalization
+%just if it's not yet normalised; won't change anything if it already is
+mini = min(image(:));
+maxi = max(image(:));
+filtered =  (image-mini)/(maxi-mini);
+
+
+%% (2) Initialize segmentation: create gradient image
+s = it;
+[~,~,Gv,Gh] = edge(filtered,'sobel');
+RegionStorage = cell(s,2);
+BW_zero = false(size(filtered));
+BW_zero([1:border end-border:end],:) = 0;
+BW_zero(:,[1:border end-border:end]) = 0;
+Op =sqrt((Gv.*Gv)+(Gh.*Gh));
+
+c = 1;
+pth_0 = 0.95;
+thresh = calcthresh(filtered,pth_0);
+hInit =max(Op(:));
+
+%% (3) iterative thresholding followed by morphological operations and watershed transformation
+for step = 1:s
+    x = step-1;
+    pth = 0.005*(1.259)^x;    
+    BW = S(Op,pth,hInit);    
+    %remove BW borders
+    BW([1:border end-border:end],:) = 0;
+    BW(:,[1:border end-border:end]) = 0;
+    
+    BW = BW-BW_zero;
+    
+    % morphological operators
+    SE = strel('disk',1,0);
+    BWdil = imdilate(BW,SE);
+    BWfill = imfill(BWdil,4,'holes');
+    BWer = imerode(BWfill,SE);
+    %fill holes
+    BWfill = BWer;
+    BWfill = logical(BWfill);  
+    Nozero = filtered(BWfill);
+    Nozero(Nozero == 0) = [];
+    h = Minimum_median(Nozero, 5, 'Type','percent', 'Dimension',1 );
+    
+    %get regiones    
+    RegProp = regionprops(BWfill, 'PixelIdxList', 'PixelList', 'Area','Perimeter');
+    
+    % delete small regions;
+    RegPropNew = RegProp;
+    RegPropNew([RegProp.Area] <= minArea) = [];
+    
+    BWcleared = zeros(size(BW));
+    nRoi = length(RegPropNew);
+    for roi = 1:nRoi
+        BWcleared(RegPropNew(roi).PixelIdxList) = 1;
+    end
+        
+    
+    % particle refinement
+    N = length(RegProp)*10;
+    regionList = repmat(struct('PixelIdxList',[]),1,N);
+    counter = 1;
+    unchanged = 0;
+    for roi = 1:nRoi      
+       
+        if RegPropNew(roi).Area >= minArea*3
+            region = RegPropNew(roi).PixelList;
+            idx = RegPropNew(roi).PixelIdxList;
+            
+            [centroids, section, xmin, ymin] = getCentroids(region,idx,filtered);
+            if length(centroids) > 200 || isempty(centroids)
+                continue
+            elseif length(centroids) == 1
+                PixelIdxList = RegPropNew(roi).PixelIdxList;
+                % discard "tails'
+                BWcur = zeros(size(BW));
+                BWcur(PixelIdxList) = 1;
+                BWdisc = imerode(BWcur,SE);
+                BWdisc = imdilate(BWdisc,SE);
+                regiondisc = regionprops(BWdisc,'Area','PixelList','PixelIdxList');
+                [regionList, counter] = checkIfMultiple(regionList, regiondisc, counter, BWdisc);
+                
+                unchanged = unchanged + 1;
+                regionList(counter-1).unchanged = 1;
+                continue
+            end
+            
+            [idxList, numbC] = getSingles(centroids, section, thresh);
+            
+            idxListtrans = idxList;
+            idxList = coordTrans(idxListtrans, size(section),size(BWfill), xmin, ymin);
+            [counter, regionList] = precising(regionList,idxList,numbC, size(BWfill), counter,h, filtered, minArea);
+        else
+            % condition above threshold:
+            PixelIdxList = RegPropNew(roi).PixelIdxList;
+            regionList(counter).Area = length(RegPropNew(roi).PixelList);
+            regionList(counter).PixelList = RegPropNew(roi).PixelList;
+            
+            % discard "tails'
+            BWcur = zeros(size(BW));
+            BWcur(PixelIdxList) = 1;
+            if length(PixelIdxList) >= minArea * 2
+                BWdisc = imerode(BWcur,SE);
+                BWdisc = imdilate(BWdisc,SE);
+            else
+                BWdisc = BWcur;
+            end
+            regiondisc = regionprops(BWdisc,'Area','PixelList','PixelIdxList');
+           
+            if size(regiondisc,1) ~= 0
+                [regionList, counter] = checkIfMultiple(regionList, regiondisc, counter, BW);
+            else
+                regionList(counter) = [];
+                counter = counter + 1;
+            end
+            
+            
+            unchanged = unchanged + 1;
+            regionList(counter-1).unchanged = 1;
+            
+        end
+        
+    end
+    regionList = regionList(1:counter-1);
+    if size(regionList,2) == 0
+        continue
+    end
+    regionList(cellfun(@isempty,{regionList.Area})) = [];
+    regionList(cellfun(@isempty,{regionList.PixelIdxList})) = [];
+    regionList([regionList.Area] < minArea) = [];
+    
+    % current BW template
+    BW_watershed = zeros(size(BW));    
+    nRoi = length(regionList);
+    for roi = 1:nRoi        
+        BW_watershed (regionList(roi).PixelIdxList) = 1;
+    end
+    
+    BW_zero = logical(BW_zero+BW_watershed);
+    
+    RegionStorage{c,1} = regionList;
+    RegionStorage{c,2} = length(regionList);
+    c = c+1;
+end
+
+
+%% (4) create whole list with ROI coordinates
+numbRoi = sum(cell2mat(RegionStorage(:,2)));
+
+regionList = repmat(struct('PixelIdxList',[]),numbRoi,1);
+count=1;
+for slice = 1:c-1    
+    regL = RegionStorage{slice,1};
+    for roi = 1:length(regL)
+        regionList(count+roi-1).PixelIdxList = regL(roi).PixelIdxList;        
+    end
+    count= count+length(regL)-1;
+end
+
+regionList(cellfun(@isempty,{regionList.PixelIdxList})) = [];
+
+regionStats = regionList;
+
+%% (5) clear overlaps and create binary mask (BW_watershed) and labeled matrix (L-watershed)
+for clearing = 1:3
+    BW_watershed = zeros(size(BW));
+    L_watershed = zeros(size(BW));
+    %nRoi = length(RegPropNew);
+    nRoi = length(regionStats);
+    for roi = 1:nRoi
+        L_watershed (regionStats(roi).PixelIdxList) = roi;
+        BW_watershed (regionStats(roi).PixelIdxList) = 1;
+    end
+    regionStats = regionprops(L_watershed,image, 'PixelIdxList', 'PixelList', 'Area','Perimeter','WeightedCentroid'...
+        ,'MeanIntensity','MaxIntensity');
+    % clear
+    regionStats([regionStats.MeanIntensity] == 0) = [];
+    regionStats([regionStats.Area] < minArea ) = [];
+    regionStats([regionStats.Area] > maxArea ) = [];
+    regionStats(cellfun(@isempty,{regionStats.PixelIdxList})) = [];
+end
+
+%% (6) visualize segmentation
+%colored watershed
+
+Label = label2rgb(L_watershed,'jet','w','shuffle');
+imshow(Label)
+title('Colored Watershed Label Matrix')
+vis_cells(filtered ,BW_watershed);
+
+
+end
+
+%%:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+function Op2 = S(Op, pth, hInit)
+
+Oplin = Op(:);
+[counts,bins] = hist(Oplin,500);
+k = 0;
+while sum(counts(end-k:end))< pth*sum(counts) %threshold finden
+    k = k+1;
+end
+h=bins(end-k+1);
+Op2 = Op;
+Op2(Op2<h | Op2>hInit) = 0;
+Op2 = logical(Op2);
+end
+
+function [regList_all, counter] = checkIfMultiple(regList_all,regList,counter, img) %image just for size
+template = zeros(size(img));
+counterInit = counter;
+
+if isfield(regList,'PixelIdxList') && ~isempty(regList) 
+    template(regList.PixelIdxList)=1;
+    select = bwconncomp(template,4);
+    if select.NumObjects > 1
+        numObj = select.NumObjects;
+        for nO = 1:numObj
+            PixelIdxList = select.PixelIdxList{1,nO};
+            %regCleaned = cleanRg(PixelIdxList,sizImg,SE);
+            if length(PixelIdxList) < 6              
+                continue
+            end
+            regList_all(counter).PixelIdxList = PixelIdxList;
+            regList_all(counter).Area = length(PixelIdxList);
+            [r,c] = ind2sub(size(img),PixelIdxList);
+            regList_all(counter).PixelList = [r c];
+            counter = counter+1;
+        end
+        if counter == counterInit % if all regions are below min numb pixel
+            counter = counter + 1;
+        end
+    else        
+        regList_all(counter).PixelIdxList = regList.PixelIdxList;
+        regList_all(counter).Area = length(regList.PixelIdxList);
+        [r,c] = ind2sub(size(img),regList.PixelIdxList);
+        regList_all(counter).PixelList = [r c];
+        counter = counter+1;
+    end
+end
+end
+
+function S = calcthresh(img,pth)
+ImgVec = img(:);
+ImgVec = double(ImgVec);
+ImgVec(ImgVec==0) = [];
+[counts,bins] = hist(ImgVec,500);
+%hist(ImgVec,50) falls mans doch mal sehen will
+k = 0;
+while sum(counts(end-k:end))< pth*sum(counts) %threshold finden
+    k = k+1;
+end
+S = bins(end-k+1);
+end
+
+
+##### SOURCE END #####
+--></body></html>

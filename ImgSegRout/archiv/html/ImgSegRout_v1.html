@@ -1,0 +1,328 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>ImgSegRout_v1</title><meta name="generator" content="MATLAB 9.3"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2022-01-12"><meta name="DC.source" content="ImgSegRout_v1.m"><style type="text/css">
+html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,sub,sup,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
+
+html { min-height:100%; margin-bottom:1px; }
+html body { height:100%; margin:0px; font-family:Arial, Helvetica, sans-serif; font-size:10px; color:#000; line-height:140%; background:#fff none; overflow-y:scroll; }
+html body td { vertical-align:top; text-align:left; }
+
+h1 { padding:0px; margin:0px 0px 25px; font-family:Arial, Helvetica, sans-serif; font-size:1.5em; color:#d55000; line-height:100%; font-weight:normal; }
+h2 { padding:0px; margin:0px 0px 8px; font-family:Arial, Helvetica, sans-serif; font-size:1.2em; color:#000; font-weight:bold; line-height:140%; border-bottom:1px solid #d6d4d4; display:block; }
+h3 { padding:0px; margin:0px 0px 5px; font-family:Arial, Helvetica, sans-serif; font-size:1.1em; color:#000; font-weight:bold; line-height:140%; }
+
+a { color:#005fce; text-decoration:none; }
+a:hover { color:#005fce; text-decoration:underline; }
+a:visited { color:#004aa0; text-decoration:none; }
+
+p { padding:0px; margin:0px 0px 20px; }
+img { padding:0px; margin:0px 0px 20px; border:none; }
+p img, pre img, tt img, li img, h1 img, h2 img { margin-bottom:0px; } 
+
+ul { padding:0px; margin:0px 0px 20px 23px; list-style:square; }
+ul li { padding:0px; margin:0px 0px 7px 0px; }
+ul li ul { padding:5px 0px 0px; margin:0px 0px 7px 23px; }
+ul li ol li { list-style:decimal; }
+ol { padding:0px; margin:0px 0px 20px 0px; list-style:decimal; }
+ol li { padding:0px; margin:0px 0px 7px 23px; list-style-type:decimal; }
+ol li ol { padding:5px 0px 0px; margin:0px 0px 7px 0px; }
+ol li ol li { list-style-type:lower-alpha; }
+ol li ul { padding-top:7px; }
+ol li ul li { list-style:square; }
+
+.content { font-size:1.2em; line-height:140%; padding: 20px; }
+
+pre, code { font-size:12px; }
+tt { font-size: 1.2em; }
+pre { margin:0px 0px 20px; }
+pre.codeinput { padding:10px; border:1px solid #d3d3d3; background:#f7f7f7; }
+pre.codeoutput { padding:10px 11px; margin:0px 0px 20px; color:#4c4c4c; }
+pre.error { color:red; }
+
+@media print { pre.codeinput, pre.codeoutput { word-wrap:break-word; width:100%; } }
+
+span.keyword { color:#0000FF }
+span.comment { color:#228B22 }
+span.string { color:#A020F0 }
+span.untermstring { color:#B20000 }
+span.syscmd { color:#B28C00 }
+
+.footer { width:auto; padding:10px 0px; margin:25px 0px 0px; border-top:1px dotted #878787; font-size:0.8em; line-height:140%; font-style:italic; color:#878787; text-align:left; float:none; }
+.footer p { margin:0px; }
+.footer a { color:#878787; }
+.footer a:hover { color:#878787; text-decoration:underline; }
+.footer a:visited { color:#878787; }
+
+table th { padding:7px 5px; text-align:left; vertical-align:middle; border: 1px solid #d6d4d4; font-weight:bold; }
+table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px solid #d6d4d4; }
+
+
+
+
+
+  </style></head><body><div class="content"><h2>Contents</h2><div><ul><li><a href="#3">(1) Data Input and save path</a></li><li><a href="#6">(2) Find ROIs;</a></li><li><a href="#7">(3)Readout and calculation of background traces</a></li><li><a href="#8">(4) Subtraction of background</a></li><li><a href="#9">(5) smooth traces</a></li><li><a href="#10">(6) correction for bleaching</a></li><li><a href="#11">data sheets: rawdata, backgroundsubtracted Data, + smoothed, + bleching corrected, - smoothed)</a></li><li><a href="#12">(12) save results as excel file // one per experiment</a></li></ul></div><pre class="codeinput"><span class="comment">% 12.01.2022: release beta v1</span>
+<span class="comment">% imgSegRout: a function to read out fluorescence traces from image stacks in time lapse</span>
+<span class="comment">% microscopy automatically</span>
+<span class="comment">% Segmentation is performed using SynEdgeWs</span>
+<span class="comment">%</span>
+
+<span class="keyword">function</span> ImgSegRout_v1(preprocessing, iteration, sizeSettings, FrameRange, Func)
+</pre><pre class="codeinput">alignCommand = Func.Align;
+bleachingCorr = Func.bleaching;
+
+[minArea,maxArea] = convert2pixel(sizeSettings);
+
+discard = preprocessing.Discard;
+denoise = preprocessing.Denoise;
+showImage = preprocessing.ShowImage;
+
+it = iteration.it;
+</pre><pre class="codeoutput error">Not enough input arguments.
+
+Error in ImgSegRout_v1 (line 10)
+alignCommand = Func.Align;
+</pre><h2 id="3">(1) Data Input and save path</h2><pre class="codeinput"><span class="comment">% a) Select experiments</span>
+<span class="comment">%---------------------------------</span>
+    [dataFiles, dataPath] = uigetfile (<span class="string">'.tif'</span>,<span class="string">'select experiment files'</span>, <span class="string">'Multiselect'</span>, <span class="string">'on'</span>);
+    dataComplete = fullfile(dataPath,dataFiles);
+
+
+<span class="comment">% d) name Excel-Sheet</span>
+[reportFile,reportPath] = uiputfile(<span class="string">'.xlsx'</span>,<span class="string">'Name Report File'</span>);
+
+
+<span class="keyword">if</span> ~iscell(dataComplete)
+    dataComplete = cellstr(dataComplete);
+<span class="keyword">end</span>
+
+N = length(dataComplete);
+</pre><pre class="codeinput"><span class="comment">%preallocating data sets</span>
+dataSet = cell(N,6);
+<span class="keyword">for</span> exp = 1:N
+</pre><pre class="codeinput">    <span class="keyword">if</span> ~iscell(dataFiles)
+        dataFiles = cellstr(dataFiles);
+    <span class="keyword">end</span>
+    name = dataFiles{1,exp};
+    name = replace(name,<span class="string">'.tif'</span>,<span class="string">''</span>);
+    cyStack = LoadMultipage(dataComplete{exp}, 0);  <span class="comment">%load image stack</span>
+    <span class="keyword">if</span> alignCommand  == 1
+        cyStack = aligneSequence(cyStack);
+         sprintf(<span class="string">'alignment of experiment %i completed'</span>,exp)
+    <span class="keyword">end</span>
+</pre><h2 id="6">(2) Find ROIs;</h2><p>a) prepare image for searching ROI,take the last frames after ammonium chloride</p><pre class="codeinput">    len = size(cyStack,3);
+    <span class="comment">%range = len-4:len;</span>
+    range = FrameRange.Frame1 : FrameRange.Frame2;
+    averageImg = mean(cyStack(:,:,range),3,<span class="string">'native'</span>);
+    <span class="comment">% restore averageImg for more precise detection</span>
+    averageImgPro = PreProcessing(averageImg,discard,denoise,showImage);
+    [regionProp, ~] = ellDetection_iterative_v1_ImgSegRout(averageImgPro, minArea, maxArea, it);
+</pre><h2 id="7">(3)Readout and calculation of background traces</h2><pre class="codeinput">    regNb = length(regionProp);
+    <span class="comment">%restoration of traces //Normalization and Backgroundsubtraction</span>
+    [data, backgroundTrace, regionNb] = Readout(regionProp, regNb, cyStack);
+</pre><h2 id="8">(4) Subtraction of background</h2><pre class="codeinput">    <span class="comment">%regionNb = size(data,1);</span>
+    data_BGsubt = zeros(size(data));
+    <span class="keyword">for</span> region = 1:regionNb
+        traceTemp = data(region,:) - backgroundTrace;
+        data_BGsubt(region,:) = traceTemp;
+    <span class="keyword">end</span>
+    mean_BG = mean(data_BGsubt,1);
+</pre><h2 id="9">(5) smooth traces</h2><pre class="codeinput">    tracesSmth = zeros(size(data));
+    regNb = regionNb;
+    <span class="keyword">for</span> i = 1:regNb
+        tracesSmth(i,:) = smooth(data_BGsubt(i,:));
+    <span class="keyword">end</span>
+    meanCurve = mean(tracesSmth,1);
+</pre><h2 id="10">(6) correction for bleaching</h2><pre class="codeinput">    <span class="comment">% get coefficient</span>
+    <span class="keyword">if</span> bleachingCorr == 1
+        [lambda, ~] = createBleachingCurve_woPoly(meanCurve, 13 , 4, 0, 1);  <span class="comment">%original, range, cuttingWin, nStim, show images</span>
+
+        <span class="comment">% perform correction</span>
+        dataCorr = zeros(size(data));
+        dataCorrSmth = zeros(size(data));
+        <span class="keyword">for</span> k = 1:regNb
+            dataCorr(k,:) = itDeconv (data_BGsubt(k,:), lambda);
+        <span class="keyword">end</span>
+        <span class="keyword">for</span> k = 1:regNb
+            dataCorrSmth(k,:) = itDeconv (tracesSmth(k,:),lambda);
+        <span class="keyword">end</span>
+
+    <span class="keyword">else</span>
+        dataCorr = data_BGsubt;
+        dataCorrSmth = tracesSmth;
+    <span class="keyword">end</span>
+
+    <span class="comment">%meanCorr_nc = mean(dataCorrSmth,1);</span>
+    <span class="comment">%meanCorr = mean(dataCorrSmth,1);</span>
+
+   sprintf(<span class="string">'preprocessing of measurement%i succeeded'</span>,exp)
+
+
+
+ <span class="comment">%----------DATA STORAGE---------------------------------------</span>
+</pre><h2 id="11">data sheets: rawdata, backgroundsubtracted Data, + smoothed, + bleching corrected, - smoothed)</h2><pre class="codeinput">        datasheet = cat(3,data,data_BGsubt, tracesSmth, dataCorrSmth, dataCorr);
+</pre><h2 id="12">(12) save results as excel file // one per experiment</h2><pre class="codeinput">        filename = replace(dataFiles{exp},<span class="string">'.tif'</span>,sprintf(<span class="string">'_%s'</span>,reportFile));
+        export2Excel_afterSeg_Imaging(datasheet,reportPath,filename)
+        varnam = replace(dataFiles{exp},<span class="string">'.tif'</span>,<span class="string">''</span>);
+        dataSet(exp,1) = cellstr(varnam);
+        dataSet{exp,2} = data;
+        dataSet{exp,3} = data_BGsubt;
+        dataSet{exp,4} = tracesSmth;
+        dataSet{exp,5} = dataCorrSmth; <span class="comment">%if bleaching == 0 dataCorrSmth = tracesSmth</span>
+        dataSet{exp,6} = dataCorr; <span class="comment">%if bleaching == 0 dataCorr = tracesSmth</span>
+</pre><pre class="codeinput"><span class="keyword">end</span>
+
+   matname = replace(reportFile,<span class="string">'.xlsx'</span>,<span class="string">'matfile_'</span>);
+   cd (reportPath)
+   save(matname,<span class="string">'dataSet'</span>)
+</pre><pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br><a href="http://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2017b</a><br></p></div><!--
+##### SOURCE BEGIN #####
+
+% 12.01.2022: release beta v1
+% imgSegRout: a function to read out fluorescence traces from image stacks in time lapse 
+% microscopy automatically
+% Segmentation is performed using SynEdgeWs
+% 
+
+function ImgSegRout_v1(preprocessing, iteration, sizeSettings, FrameRange, Func)
+
+alignCommand = Func.Align;
+bleachingCorr = Func.bleaching;
+
+[minArea,maxArea] = convert2pixel(sizeSettings);
+ 
+discard = preprocessing.Discard;
+denoise = preprocessing.Denoise;
+showImage = preprocessing.ShowImage;
+
+it = iteration.it;
+%% (1) Data Input and save path
+
+
+% a) Select experiments
+%REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH-
+    [dataFiles, dataPath] = uigetfile ('.tif','select experiment files', 'Multiselect', 'on'); 
+    dataComplete = fullfile(dataPath,dataFiles);
+   
+
+% d) name Excel-Sheet
+[reportFile,reportPath] = uiputfile('.xlsx','Name Report File');
+
+
+if ~iscell(dataComplete)
+    dataComplete = cellstr(dataComplete);
+end
+
+N = length(dataComplete); 
+
+
+%%
+%preallocating data sets
+dataSet = cell(N,6);
+for exp = 1:N    
+    if ~iscell(dataFiles)
+        dataFiles = cellstr(dataFiles);
+    end
+    name = dataFiles{1,exp}; 
+    name = replace(name,'.tif','');
+    cyStack = LoadMultipage(dataComplete{exp}, 0);  %load image stack
+    if alignCommand  == 1
+        cyStack = aligneSequence(cyStack);
+         sprintf('alignment of experiment %i completed',exp)
+    end
+   
+    %% (2) Find ROIs;
+    % a) prepare image for searching ROI,take the last frames after
+    % ammonium chloride
+    len = size(cyStack,3);
+    %range = len-4:len;
+    range = FrameRange.Frame1 : FrameRange.Frame2;
+    averageImg = mean(cyStack(:,:,range),3,'native');
+    % restore averageImg for more precise detection
+    averageImgPro = PreProcessing(averageImg,discard,denoise,showImage);
+    [regionProp, ~] = ellDetection_iterative_v1_ImgSegRout(averageImgPro, minArea, maxArea, it);
+    
+    %% (3)Readout and calculation of background traces
+    regNb = length(regionProp);
+    %restoration of traces //Normalization and Backgroundsubtraction
+    [data, backgroundTrace, regionNb] = Readout(regionProp, regNb, cyStack);
+
+    %% (4) Subtraction of background
+    %regionNb = size(data,1);
+    data_BGsubt = zeros(size(data));
+    for region = 1:regionNb
+        traceTemp = data(region,:) - backgroundTrace;
+        data_BGsubt(region,:) = traceTemp;
+    end      
+    mean_BG = mean(data_BGsubt,1);
+       
+    %% (5) smooth traces
+    tracesSmth = zeros(size(data));
+    regNb = regionNb;
+    for i = 1:regNb
+        tracesSmth(i,:) = smooth(data_BGsubt(i,:));
+    end
+    meanCurve = mean(tracesSmth,1);
+    
+    %% (6) correction for bleaching
+    
+    % get coefficient
+    if bleachingCorr == 1
+        [lambda, ~] = createBleachingCurve_woPoly(meanCurve, 13 , 4, 0, 1);  %original, range, cuttingWin, nStim, show images
+        
+        % perform correction
+        dataCorr = zeros(size(data));
+        dataCorrSmth = zeros(size(data));
+        for k = 1:regNb
+            dataCorr(k,:) = itDeconv (data_BGsubt(k,:), lambda);
+        end
+        for k = 1:regNb
+            dataCorrSmth(k,:) = itDeconv (tracesSmth(k,:),lambda);
+        end
+        
+    else
+        dataCorr = data_BGsubt;
+        dataCorrSmth = tracesSmth;
+    end
+    
+    %meanCorr_nc = mean(dataCorrSmth,1);
+    %meanCorr = mean(dataCorrSmth,1); 
+      
+   sprintf('preprocessing of measurement%i succeeded',exp)
+    
+        
+    
+ %REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHDATA STORAGEREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH-            
+        %% data sheets: rawdata, backgroundsubtracted Data, + smoothed, + bleching corrected, - smoothed)
+        datasheet = cat(3,data,data_BGsubt, tracesSmth, dataCorrSmth, dataCorr);  
+            
+           
+    
+        
+        %% (12) save results as excel file // one per experiment
+        filename = replace(dataFiles{exp},'.tif',sprintf('_%s',reportFile));
+        export2Excel_afterSeg_Imaging(datasheet,reportPath,filename)
+        varnam = replace(dataFiles{exp},'.tif','');
+        dataSet(exp,1) = cellstr(varnam);
+        dataSet{exp,2} = data;
+        dataSet{exp,3} = data_BGsubt;
+        dataSet{exp,4} = tracesSmth;
+        dataSet{exp,5} = dataCorrSmth; %if bleaching == 0 dataCorrSmth = tracesSmth
+        dataSet{exp,6} = dataCorr; %if bleaching == 0 dataCorr = tracesSmth
+end
+
+   matname = replace(reportFile,'.xlsx','matfile_');
+   cd (reportPath)
+   save(matname,'dataSet')
+   
+end
+
+
+##### SOURCE END #####
+--></body></html>

@@ -1,0 +1,25 @@
+function [ImageSub, backgroundValue] = BackgroundSubtraction_Roling(img,varargin)
+%backgroundsubtraction
+
+%% create background image
+%create mask = 
+sequence = [10 8 6 4 2 1 2 4 6 8 10];
+if nargin >= 2
+    numb = varargin{1};
+    sequence = -numb:1:numb;
+end
+kernel1 = repmat(sequence,length(sequence),1);
+kernel2 = repmat(sequence',1,length(sequence));
+K = sqrt(kernel1.*kernel1 + kernel2.*kernel2);
+kn = sum(sum(K));
+K_n = K./kn;
+
+blurred = conv2(img,K_n,'same');
+
+
+ImageSub =img - blurred;
+ImageSub(ImageSub < 0) = 0;
+
+backgroundValue = mean(blurred(:));
+
+end
