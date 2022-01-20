@@ -19,8 +19,6 @@ denoise during preprocessing yes/no
 
  
 
-planned release date: 29.11.2021
-
 we will always keep on updating repository with the most recent versions
 
 for questions write to eva-maria.weiss@uk-erlangen.de
