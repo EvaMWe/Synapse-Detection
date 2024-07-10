@@ -19,6 +19,6 @@ denoise during preprocessing yes/no
 
  
 
-we will always keep on updating repository with the most recent versions
+this function is not being updated anymore;
 
-for questions write to eva-maria.weiss@uk-erlangen.de
+for questions write to eva-maria_weiss@gmx.de
